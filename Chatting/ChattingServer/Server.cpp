@@ -1,6 +1,7 @@
 #pragma comment(lib, "ws2_32.lib") //명시적으로 라이브러리를 호출하는 방법 중에 하나
 
 #include <iostream>
+#include <sstream>
 #include <string>
 #include <WinSock2.h>
 #include <thread>
@@ -77,7 +78,7 @@ string ID_Check(string id) {
     else password = "X";
 
     delete result;
-    
+
     return password;
 }
 
@@ -210,8 +211,6 @@ void add_client() {
     //그 주소를 담을 변수 => addr
     SOCKADDR_IN addr = {};
     int addrsize = sizeof(addr);
-    char buf[MAX_SIZE] = { }; //메시지 최대 길이 설정
-
     ZeroMemory(&addr, addrsize); //addr 메모리를 0(0x00)으로 초기화
 
     //sck, user : 클라이언트의 소켓 정보를 저장
@@ -219,21 +218,40 @@ void add_client() {
 
     new_client.sck = accept(server_sock.sck, (sockaddr*)&addr, &addrsize);
     //connect()
-    
-    //while(true) {
-    //    //클라이언트 connect(), send()
-    //    if (recv(new_client.sck, buf, MAX_SIZE, 0) > 0) {
-    //        new_client.user = string(buf); //new_client.user에 id 저장
 
-    //        if (Dup_Check(new_client.user)) {
-    //            send(new_client.sck, msg, MAX_SIZE, 0);
-    //        }
-    //    }
-    //}
+    char buf[MAX_SIZE] = { }; //메시지 최대 길이 설정
+    while(true) {
+        string input_msg;
+
+        ZeroMemory(&buf, MAX_SIZE);
+        //클라이언트 connect(), send()
+        if (recv(new_client.sck, buf, MAX_SIZE, 0) > 0) {
+            input_msg = buf;
+            std::stringstream ss(input_msg);  // 문자열을 스트림화
+            string user_id, user_password;
+            ss >> user_id; // 스트림을 통해, 문자열을 공백 분리해 변수에 할당
+            ss >> user_password;
+
+            new_client.user = string(user_id); //new_client.user에 id 저장
+            string password = ID_Check(new_client.user);
+
+            string return_msg = "";
+            if (password.compare(user_password) == 0) {
+                string msg = "[공지] " + new_client.user + " 님이 입장했습니다.";
+                cout << msg << endl; //서버 콘솔에 공지 찍음
+                return_msg = "Y";
+                send(new_client.sck, return_msg.c_str(), 1, 0);
+                break;
+            }
+            else {
+                return_msg = "N";
+                send(new_client.sck, return_msg.c_str(), 1, 0);
+            }
+        }
+
+        else return;
+    }
     
-    string msg = "[공지] " + new_client.user + " 님이 입장했습니다.";
-    cout << msg << endl; //서버 콘솔에 공지 찍음
-    //[{12345, "soyeon"}, {12345, "soyeon"}, {12345, "soyeon"}]
     sck_list.push_back(new_client); //sck list에 추가함
 
     //방금 생성된 client가 앞으로도 계속 메시지를 받을 수 있도록 recv
@@ -241,7 +259,7 @@ void add_client() {
 
     client_count++;
     cout << "[공지] 현재 접속자 수 : " << client_count << "명" << endl;
-    send_msg(msg.c_str()); //누가 들어왔는지 공지 하기 위해서
+    //send_msg(msg.c_str()); //누가 들어왔는지 공지 하기 위해서
 
     th.join();
 }
