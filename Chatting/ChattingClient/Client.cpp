@@ -112,7 +112,6 @@ int login() {
 		cout << "server off" << endl;
 		return -1;
 	}
-
 }
 
 int main()
