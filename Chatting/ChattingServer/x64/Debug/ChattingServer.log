@@ -1,0 +1,2 @@
+﻿  Server.cpp
+C:\Users\LYHo\Desktop\ChattingProject\Chatting\ChattingServer\Server.cpp(3,10): fatal error C1083: 포함 파일을 열 수 없습니다. 'mysql/jdbc.h': No such file or directory
