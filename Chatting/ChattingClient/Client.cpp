@@ -15,12 +15,19 @@ using std::endl;
 using std::string;
 using std::vector;
 
+struct ROOMS_INFO {
+	int id;
+	string room_name;
+	int count_client;
+};
+
 SOCKET client_sock;
 string my_id;
-vector<int> rooms_id;
-int current_room;
+vector<ROOMS_INFO> rooms_info;
+int current_room, count_room;
 
 bool show_rooms();
+void choose_room();
 
 int chat_recv() {
 	char buf[MAX_SIZE] = { };
@@ -42,7 +49,7 @@ int chat_recv() {
 }
 
 //키보드 입력
-string _input(boolean isPassword) {
+string _input(bool isPassword, bool isSign) {
 	string res = "";
 
 	while (true) {
@@ -50,7 +57,8 @@ string _input(boolean isPassword) {
 
 		if (ch == 32) continue;
 		else if (ch == 13) { //\n
-			if (res.length() <= 0 || (isPassword && res.length() < 8)) continue;
+			if (res.length() < 1 && isSign && ch == 'X') return "X";
+			if (res.length() < 3) continue;
 			break;
 		}
 		// 지우기 벡스페이스
@@ -87,17 +95,16 @@ string _input(boolean isPassword) {
 //아이디 확인 후 비밀번호 입력, 반환 값이 false면 프로그램 종료
 int login() {
 	string input_user_id, input_user_pw;
-	cout << "\n아이디는 50자 이하로 입력하세요. 띄어쓰기는 입력할 수 없습니다.\n";
-	cout << "비밀번호는 8자 이상 50자 이하로 입력하세요. 띄어쓰기는 입력할 수 없습니다.\n";
-
-	char buf[1] = { };
-	ZeroMemory(&buf, 1);
+	cout << "\n아이디와 비밀번호는 3자 이상 50자 이하로 입력하세요. 띄어쓰기는 입력할 수 없습니다.\n";
+	
+	char buf[2] = { };
+	ZeroMemory(&buf, 2);
 
 	cout << "아이디를 입력해주세요 : ";
-	input_user_id = _input(false);
+	input_user_id = _input(false, false);
 
 	cout << "비밀번호를 입력해주세요 : ";
-	input_user_pw = _input(true);
+	input_user_pw = _input(true, false);
 
 	string input_user = input_user_id + " " + input_user_pw;
 	//server에 id, password를 보내서 recv()로 id와 password 받기
@@ -106,7 +113,11 @@ int login() {
 	string msg;
 	if (recv(client_sock, buf, 1, 0) > 0) {
 		msg = buf;
-		if (msg.compare("Y") == 0) return 1;
+		if (msg.compare("Y") == 0) {
+			my_id = input_user_id;
+
+			return 1;
+		}
 		else { 
 			cout << "틀린 아이디/패스워드 입니다.\n\n";
 			return 0; 
@@ -121,21 +132,27 @@ int login() {
 bool show_rooms() { //반환값이 false면 서버오류
 	char buf[MAX_SIZE] = { };
 	ZeroMemory(&buf, MAX_SIZE);
+
 	if (recv(client_sock, buf, MAX_SIZE, 0) > 0) {
 		string roomInfo = buf;
+		if (roomInfo.compare("참여중인 채팅방이 없습니다.") == 0) {
+			cout << "참여중인 채팅방이 없습니다.\n";
+			return true;
+		}
 		std::istringstream iss(roomInfo);  // 문자열을 스트림화
 		string temp;
 		
-		int index = 0;
+		count_room = 0;
 		while (getline(iss, temp, ',')) {
 			std::stringstream ss(temp);  // 문자열을 스트림화
-			string msg;
 
-			ss >> msg;
-			rooms_id.push_back(stoi(msg));
-			ss >> msg;
+			ROOMS_INFO room = {};
+			ss >> room.id;
+			ss >> room.room_name;
+			ss >> room.count_client;
+			rooms_info.push_back(room);
 
-			cout << index++ << " : " << msg << endl;
+			cout << count_room++ << " : " << room.room_name << "(" << room.count_client << ")" << endl;
 		}
 	}
 	else {
@@ -143,7 +160,21 @@ bool show_rooms() { //반환값이 false면 서버오류
 		return false;
 	}
 
+	//채팅방 선택
+	choose_room();
+
 	return true;
+}
+
+void choose_room() {
+	int room_number = -1;
+	while (room_number < 0 || room_number >= count_room) {
+		cout << "채팅방을 선택하세요. : ";
+		cin >> room_number;
+	}
+
+	current_room = rooms_info[room_number].id;
+	cout << rooms_info[room_number].room_name << " 방에 입장했습니다.\n\n";
 }
 
 int main()
@@ -176,7 +207,7 @@ int main()
 			cout << "              1. 로 그 인               \n";
 			cout << "              2. 회원가입               \n";
 
-			int isLogin;
+			int isLogin = 1;
 			cin >> isLogin;
 
 			if (isLogin == 1) {
@@ -189,17 +220,15 @@ int main()
 		cout << "\n로그인 성공!\n";
 		cout << "[참여중인 채팅방 목록]\n\n";
 		if (!show_rooms()) return -1;
-		
-		//채팅방 선택
-		int room_number;
-		cin >> room_number;
 
+		cin.ignore();
 		std::thread th2(chat_recv);
 		while (1) {
 			string text;
 			std::getline(cin, text);
-			const char* buffer = text.c_str(); // string형을 char* 타입으로 변환
-			send(client_sock, buffer, strlen(buffer), 0);
+			string buffer = std::to_string(current_room) + " " + text; // string형을 char* 타입으로 변환
+			
+			send(client_sock, buffer.c_str(), buffer.length(), 0);
 		}
 		th2.join();
 

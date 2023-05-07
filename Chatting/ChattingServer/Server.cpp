@@ -7,6 +7,7 @@
 #include <thread>
 #include <vector>
 #include <mysql/jdbc.h>
+#include <algorithm>
 
 #define MAX_SIZE 1024
 #define MAX_CLIENT 3
@@ -33,20 +34,43 @@ void Select(string table);
 struct SOCKET_INFO {
     SOCKET sck; //unsigned int pointer 형
     string user; //사람 이름
+
+    bool operator<(const SOCKET_INFO& other) const {
+        return user < other.user;
+    }
 };
 
-std::vector<SOCKET_INFO> sck_list; //서버에 연결된 client 저장할 변수 => vector
+template<typename T> class SortedVector {
+public:
+    void insert(const T& value) {
+        auto it = std::lower_bound(data_.begin(), data_.end(), value);
+        data_.insert(it, value);
+    }
+
+    T& operator[](size_t index) { return data_[index]; }
+    const T& operator[](size_t index) const { return data_[index]; }
+    size_t size() const { return data_.size(); }
+
+private:
+    std::vector<T> data_;
+};
+
+SortedVector<SOCKET_INFO> sck_list_sort; //서버에 연결된 client 저장할 변수 => SortedVector, 메세지 전송에 쓰임
+std::vector<SOCKET_INFO> sck_list; //서버에 연결된 client 저장할 변수 => SortedVector, 메세지 전송 외에 쓰임
 SOCKET_INFO server_sock; //서버 소켓의 정보를 저장할 변수
 int client_count = 0; //현재 접속된 클라이언트 수 카운트 용도
+int client_show_room_count = 0;
 
 void server_init(); //서버용 소켓을 만드는 함수, ~listen()까지 실행
 void add_client(); //accept 함수 실행되고 있을 예정
 void send_msg(const char* msg); //send() 실행
 void recv_msg(int idx); //recv() 실행
 void del_client(int idx); //클라이언트와의 연결을 끊을 때
+void del_client(string name);
 void login_client(); //클라이언트 로그인
 void show_rooms(int idx); //클라이언트 참여 방 보여주기
 string get_rooms(string user_id); //chatting_user의 room_id 가져오기
+int search(string key);
 //------------------------
 
 void Insert_user_info(string id, string password, string nickname) {
@@ -122,12 +146,16 @@ string get_rooms(string user_id) {
     sql::ResultSet* result;
     std::vector<string> infos;
 
-    pstmt = con->prepareStatement("select id, room_name, count_client from chatting_room where id in(select room_id from chatting_user where user_id = ?);");
+    pstmt = con->prepareStatement("select * from chatting_room where id in(select room_id from chatting_user where user_id = ?);");
     pstmt->setString(1, user_id);
     result = pstmt->executeQuery();
+
+    int count = result->rowsCount();
+    if (count <= 0) return "참여중인 채팅방이 없습니다.";
+    
     while (result->next()) {
         string temp = "";
-        temp += std::to_string(result->getInt(1)) + " " + result->getString(2) + "(" + std::to_string(result->getInt(3)) + ")";
+        temp += std::to_string(result->getInt(1)) + " " + result->getString(2) + " " + std::to_string(result->getInt(3));
         infos.push_back(temp);
     }
 
@@ -250,8 +278,8 @@ void add_client() {
 
 void show_rooms(int idx) {
     string msg = get_rooms(sck_list[idx].user);
-
-    send(sck_list[idx].sck, msg.c_str(), MAX_SIZE, 0);
+    
+    send(sck_list[idx].sck, msg.c_str(), msg.length(), 0);
 }
 
 void login_client() {
@@ -266,7 +294,7 @@ void login_client() {
 
     new_client.sck = accept(server_sock.sck, (sockaddr*)&addr, &addrsize);
     //connect()
-
+    
     char buf[MAX_SIZE] = { }; //메시지 최대 길이 설정
     while (true) {
         string input_msg;
@@ -300,6 +328,7 @@ void login_client() {
         else return;
     }
 
+    sck_list_sort.insert(new_client); //sck list_sort에 추가함
     sck_list.push_back(new_client); //sck list에 추가함
 }
 
@@ -310,6 +339,25 @@ void send_msg(const char* msg) {
     }
 }
 
+//선택한 채팅방의 클라이언트에게 보내기
+void send_msg(const char* msg, int room_number) {
+    sql::ResultSet* result;
+    std::vector<string> users_name;
+
+    pstmt = con->prepareStatement("select user_id from chatting_user where room_id = ?;");
+    pstmt->setInt(1, room_number);
+    result = pstmt->executeQuery();
+    while (result->next())
+        users_name.push_back(result->getString(1));
+    
+    delete result;
+    
+    for (int i = 0; i < users_name.size(); i++) {
+        int idx = search(users_name[i]);
+        if(idx != -1) send(sck_list_sort[idx].sck, msg, MAX_SIZE, 0);
+    }
+}
+
 void recv_msg(int idx) {
     char buf[MAX_SIZE] = { };
     string msg = "";
@@ -317,21 +365,47 @@ void recv_msg(int idx) {
     while (1) {
         ZeroMemory(&buf, MAX_SIZE);
         if (recv(sck_list[idx].sck, buf, MAX_SIZE, 0) > 0) {
-            msg = sck_list[idx].user + " : " + buf;
-            cout << msg << endl;
-            send_msg(msg.c_str());
+            string room_number, temp_msg;
+            std::stringstream ss(buf);  // 문자열을 스트림화
+            ss >> room_number;
+            ss >> temp_msg;
+
+            msg = sck_list[idx].user + " : " + temp_msg;
+
+            send_msg(msg.c_str(), stoi(room_number));
         }
         else {
             msg = "[공지] " + sck_list[idx].user + " 님이 퇴장했습니다.";
             cout << msg << endl;
             send_msg(msg.c_str());
+
+            del_client(sck_list[idx].user);
             del_client(idx);
+            client_count--;
             return;
         }
     }
 }
 
+void del_client(string name) {
+    int idx = search(name);
+    closesocket(sck_list_sort[idx].sck);
+}
+
 void del_client(int idx) {
     closesocket(sck_list[idx].sck);
-    client_count--;
+}
+
+int search(string key) {
+    int l = 0, r = client_count, mid;
+
+    while (l <= r) {
+        mid = (l + r) / 2;
+
+        if (sck_list_sort[mid].user == key) return mid;
+        else if (sck_list_sort[mid].user > key) r = mid - 1;
+        else l = mid + 1;
+    }
+
+    return -1;
 }
