@@ -44,6 +44,9 @@ void add_client(); //accept 함수 실행되고 있을 예정
 void send_msg(const char* msg); //send() 실행
 void recv_msg(int idx); //recv() 실행
 void del_client(int idx); //클라이언트와의 연결을 끊을 때
+void login_client(); //클라이언트 로그인
+void show_rooms(int idx); //클라이언트 참여 방 보여주기
+string get_rooms(string user_id); //chatting_user의 room_id 가져오기
 //------------------------
 
 void Insert_user_info(string id, string password, string nickname) {
@@ -113,6 +116,28 @@ void Delete() {
     printf("Row deleted\n");
 
     delete result;
+}
+
+string get_rooms(string user_id) {
+    sql::ResultSet* result;
+    std::vector<string> infos;
+
+    pstmt = con->prepareStatement("select id, room_name, count_client from chatting_room where id in(select room_id from chatting_user where user_id = ?);");
+    pstmt->setString(1, user_id);
+    result = pstmt->executeQuery();
+    while (result->next()) {
+        string temp = "";
+        temp += std::to_string(result->getInt(1)) + " " + result->getString(2) + "(" + std::to_string(result->getInt(3)) + ")";
+        infos.push_back(temp);
+    }
+
+    delete result;
+
+    string info = "";
+    for (int i = 0; i < infos.size() - 1; i++) info += infos[i] + ",";
+    info += infos[infos.size() - 1];
+
+    return info;
 }
 
 int main()
@@ -207,6 +232,29 @@ void server_init() {
 }
 
 void add_client() {
+    //클라이언트와 서버가 연결에 성공하면, 로그인 시도
+    login_client();
+
+    //클라이언트가 참여한 방 보여주기
+    show_rooms(client_count);
+
+    //방금 생성된 client가 앞으로도 계속 메시지를 받을 수 있도록 recv
+    std::thread th(recv_msg, client_count);
+
+    client_count++;
+    cout << "[공지] 현재 접속자 수 : " << client_count << "명" << endl;
+    //send_msg(msg.c_str()); //누가 들어왔는지 공지 하기 위해서
+
+    th.join();
+}
+
+void show_rooms(int idx) {
+    string msg = get_rooms(sck_list[idx].user);
+
+    send(sck_list[idx].sck, msg.c_str(), MAX_SIZE, 0);
+}
+
+void login_client() {
     //클라이언트와 서버가 연결에 성공하면, 새로운 소켓을 하나 생성하게 되는데,
     //그 주소를 담을 변수 => addr
     SOCKADDR_IN addr = {};
@@ -220,7 +268,7 @@ void add_client() {
     //connect()
 
     char buf[MAX_SIZE] = { }; //메시지 최대 길이 설정
-    while(true) {
+    while (true) {
         string input_msg;
 
         ZeroMemory(&buf, MAX_SIZE);
@@ -251,17 +299,8 @@ void add_client() {
 
         else return;
     }
-    
+
     sck_list.push_back(new_client); //sck list에 추가함
-
-    //방금 생성된 client가 앞으로도 계속 메시지를 받을 수 있도록 recv
-    std::thread th(recv_msg, client_count);
-
-    client_count++;
-    cout << "[공지] 현재 접속자 수 : " << client_count << "명" << endl;
-    //send_msg(msg.c_str()); //누가 들어왔는지 공지 하기 위해서
-
-    th.join();
 }
 
 //전체 클라이언트(소켓)에게 보내기

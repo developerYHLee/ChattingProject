@@ -17,6 +17,10 @@ using std::vector;
 
 SOCKET client_sock;
 string my_id;
+vector<int> rooms_id;
+int current_room;
+
+bool show_rooms();
 
 int chat_recv() {
 	char buf[MAX_SIZE] = { };
@@ -114,8 +118,38 @@ int login() {
 	}
 }
 
+bool show_rooms() { //반환값이 false면 서버오류
+	char buf[MAX_SIZE] = { };
+	ZeroMemory(&buf, MAX_SIZE);
+	if (recv(client_sock, buf, MAX_SIZE, 0) > 0) {
+		string roomInfo = buf;
+		std::istringstream iss(roomInfo);  // 문자열을 스트림화
+		string temp;
+		
+		int index = 0;
+		while (getline(iss, temp, ',')) {
+			std::stringstream ss(temp);  // 문자열을 스트림화
+			string msg;
+
+			ss >> msg;
+			rooms_id.push_back(stoi(msg));
+			ss >> msg;
+
+			cout << index++ << " : " << msg << endl;
+		}
+	}
+	else {
+		cout << "server off" << endl;
+		return false;
+	}
+
+	return true;
+}
+
 int main()
 {
+	current_room = -1;
+
 	WSADATA wsa;
 
 	// Winsock를 초기화하는 함수. MAKEWORD(2, 2)는 Winsock의 2.2 버전을 사용하겠다는 의미.
@@ -152,7 +186,13 @@ int main()
 				else break;
 			}
 		}
-		cout << "로그인 성공!\n\n";
+		cout << "\n로그인 성공!\n";
+		cout << "[참여중인 채팅방 목록]\n\n";
+		if (!show_rooms()) return -1;
+		
+		//채팅방 선택
+		int room_number;
+		cin >> room_number;
 
 		std::thread th2(chat_recv);
 		while (1) {
@@ -162,6 +202,7 @@ int main()
 			send(client_sock, buffer, strlen(buffer), 0);
 		}
 		th2.join();
+
 		closesocket(client_sock);
 	}
 	WSACleanup();
