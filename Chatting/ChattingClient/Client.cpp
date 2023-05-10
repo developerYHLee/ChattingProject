@@ -30,6 +30,8 @@ bool set_my_rooms(); //나의 채팅방 목록 my_rooms에 저장
 bool choose_room(); //채팅방 선택하기
 void exit_room(); //채팅방 화면 나가기
 bool get_message(); //채팅방의 이전 메시지 출력
+int sign_in();
+void menu();
 
 int chat_recv() {
 	char buf[MAX_SIZE] = { };
@@ -66,7 +68,7 @@ string _input(bool isPassword, bool isSign) {
 		
 		if (ch == 32) continue;
 		else if (ch == 13) { //\n
-			if (res.length() < 1 && isSign && ch == 'X') return "X";
+			if (res.length() < 1 && isSign && ch == 88) return "X";
 			if (res.length() < 3) continue;
 			break;
 		}
@@ -115,7 +117,7 @@ int login() {
 	cout << "비밀번호를 입력해주세요 : ";
 	input_user_pw = _input(true, false);
 
-	string input_user = input_user_id + " " + input_user_pw;
+	string input_user = "LOGIN " + input_user_id + " " + input_user_pw;
 	//server에 id, password를 보내서 recv()로 id와 password 받기
 	send(client_sock, input_user.c_str(), input_user.length(), 0);
 
@@ -130,6 +132,48 @@ int login() {
 		else { 
 			cout << "틀린 아이디/패스워드 입니다.\n\n";
 			return 0; 
+		}
+	}
+	else {
+		cout << "server off" << endl;
+		return -1;
+	}
+}
+
+int sign_in() {
+	string input_user_id, input_user_pw, input_user_nickname;
+	cout << "\n아이디와 비밀번호는 3자 이상 50자 이하로 입력하세요. 띄어쓰기는 입력할 수 없습니다.\n";
+
+	char buf[2] = { };
+	ZeroMemory(&buf, 2);
+
+	cout << "아이디를 입력해주세요 : ";
+	input_user_id = _input(false, true);
+	if (input_user_id.compare("X") == 0) return 0;
+
+	cout << "비밀번호를 입력해주세요 : ";
+	input_user_pw = _input(true, true);
+	if (input_user_pw.compare("X") == 0) return 0;
+
+	cout << "닉네임을 입력해주세요 : ";
+	input_user_nickname = _input(false, true);
+	if (input_user_nickname.compare("X") == 0) return 0;
+
+	string input_user = "SIGN_IN " + input_user_id + " " + input_user_pw + " " + input_user_nickname;
+	//server에 id, password, nickname 보내기
+	send(client_sock, input_user.c_str(), input_user.length(), 0);
+
+	string msg;
+	if (recv(client_sock, buf, 1, 0) > 0) {
+		msg = buf;
+		if (msg.compare("Y") == 0) {
+			my_id = input_user_id;
+
+			return 1;
+		}
+		else {
+			cout << "틀린 아이디/패스워드 입니다.\n\n";
+			return 0;
 		}
 	}
 	else {
@@ -162,17 +206,13 @@ bool set_my_rooms() { //반환값이 false면 서버오류
 			ss >> room.count_client;
 			rooms_info.push_back(room);
 
-			my_rooms += std::to_string(count_room) + " : " + room.room_name + "(" + std::to_string(room.count_client) + ")\n";
-			cout << count_room++ << " : " << room.room_name << "(" << room.count_client << ")" << endl;
+			my_rooms += std::to_string(count_room++) + " : " + room.room_name + "(" + std::to_string(room.count_client) + ")\n";
 		}
 	}
 	else {
 		cout << "server off" << endl;
 		return false;
 	}
-
-	//채팅방 선택
-	if(!choose_room()) return false;
 
 	return true;
 }
@@ -245,6 +285,24 @@ void exit_room() {
 	choose_room();
 }
 
+void menu() {
+	cout << "1. [회원정보 수정]\n";
+	cout << "2. [참여중인 채팅방 목록]\n";
+	cout << "3. [로그아웃]\n";
+
+	int menu;
+	cin >> menu;
+
+	if (menu == 1) {
+
+	}
+	else if (menu == 2) {
+		cout << my_rooms << endl;
+		choose_room();
+	}
+	else if (menu == 3) return 0;
+}
+
 int main()
 {
 	current_room = -1;
@@ -275,7 +333,7 @@ int main()
 			cout << "              1. 로 그 인               \n";
 			cout << "              2. 회원가입               \n";
 
-			int isLogin = 1;
+			int isLogin;
 			cin >> isLogin;
 
 			if (isLogin == 1) {
@@ -284,10 +342,17 @@ int main()
 				else if (loginRes == 0) continue;
 				else break;
 			}
+			else if (isLogin == 2) {
+				int signRes = sign_in();
+				if (signRes == -1) return -1;
+				else if (signRes == 0) continue;
+				else break;
+			}
 		}
-		cout << "\n로그인 성공!\n";
-		cout << "[참여중인 채팅방 목록]\n\n";
+		cout << "\n로그인 성공!\n\n";
 		if (!set_my_rooms()) return -1;
+
+		menu();
 		//exit_room();
 
 		cin.ignore();

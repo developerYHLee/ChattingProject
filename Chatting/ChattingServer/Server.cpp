@@ -31,6 +31,7 @@ void Select(string table);
 string get_rooms(string user_id); //chatting_user의 room_id 가져오기
 string SaveMessage(int room_id, string user_id, string msg); //메시지 저장하는 함수, 반환값 : 시간
 string GetChattingMessage(int room_id); //채팅방 메시지 가져오는 함수, 반환값 : 채팅방에 있는 메시지들
+void Sign_In(string user_id, string password, string nickname);
 //------------------------
 
 //------------------------ Server
@@ -145,6 +146,15 @@ void Delete() {
     printf("Row deleted\n");
 
     delete result;
+}
+
+void Sign_In(string user_id, string password, string nickname) {
+    pstmt = con->prepareStatement("INSERT INTO user_info(id, password, nickname) VALUES(?,?,?)"); // INSERT
+
+    pstmt->setString(1, user_id);
+    pstmt->setString(2, password);
+    pstmt->setString(3, nickname);
+    pstmt->execute();
 }
 
 string get_rooms(string user_id) {
@@ -357,24 +367,47 @@ void login_client() {
         if (recv(new_client.sck, buf, MAX_SIZE, 0) > 0) {
             input_msg = buf;
             std::stringstream ss(input_msg);  // 문자열을 스트림화
-            string user_id, user_password;
+            string option, user_id, user_password;
+            ss >> option;
             ss >> user_id; // 스트림을 통해, 문자열을 공백 분리해 변수에 할당
             ss >> user_password;
 
             new_client.user = string(user_id); //new_client.user에 id 저장
             string password = ID_Check(new_client.user);
 
-            string return_msg = "";
-            if (password.compare(user_password) == 0) {
-                string msg = "[공지] " + new_client.user + " 님이 입장했습니다.";
-                cout << msg << endl; //서버 콘솔에 공지 찍음
-                return_msg = "Y";
-                send(new_client.sck, return_msg.c_str(), return_msg.length(), 0);
-                break;
+            if (option.compare("LOGIN") == 0) {
+                string return_msg = "";
+                if (password.compare(user_password) == 0) {
+                    string msg = "[공지] " + new_client.user + " 님이 입장했습니다.";
+                    cout << msg << endl; //서버 콘솔에 공지 찍음
+                    return_msg = "Y";
+                    send(new_client.sck, return_msg.c_str(), return_msg.length(), 0);
+                    break;
+                }
+                else {
+                    return_msg = "N";
+                    send(new_client.sck, return_msg.c_str(), return_msg.length(), 0);
+                }
             }
-            else {
-                return_msg = "N";
-                send(new_client.sck, return_msg.c_str(), return_msg.length(), 0);
+
+            else if (option.compare("SIGN_IN") == 0) {
+                string return_msg = "";
+                if (password.compare("X") == 0) {
+                    string user_nickname;
+                    ss >> user_nickname;
+
+                    Sign_In(user_id, user_password, user_nickname);
+
+                    string msg = "[공지] " + new_client.user + " 님이 입장했습니다.";
+                    cout << msg << endl; //서버 콘솔에 공지 찍음
+                    return_msg = "Y";
+                    send(new_client.sck, return_msg.c_str(), return_msg.length(), 0);
+                    break;
+                }
+                else {
+                    return_msg = "N";
+                    send(new_client.sck, return_msg.c_str(), return_msg.length(), 0);
+                }
             }
         }
 
