@@ -22,12 +22,13 @@ struct ROOMS_INFO {
 };
 
 SOCKET client_sock;
-string my_id;
+string my_id, my_rooms;
 vector<ROOMS_INFO> rooms_info;
 int current_room, count_room;
 
-bool show_rooms();
-void choose_room();
+bool set_my_rooms(); //나의 채팅방 목록 my_rooms에 저장
+void choose_room(); //채팅방 선택하기
+void exit_room(); //채팅방 화면 나가기
 
 int chat_recv() {
 	char buf[MAX_SIZE] = { };
@@ -35,11 +36,18 @@ int chat_recv() {
 	while (1) {
 		ZeroMemory(&buf, MAX_SIZE);
 		if (recv(client_sock, buf, MAX_SIZE, 0) > 0) {
+			string user, room_id, temp;
+
 			msg = buf;
+
+			int pos = msg.find(",");  // 첫 번째 ','의 위치를 찾습니다.
+		
+			room_id = msg.substr(0, pos++);
+			msg = msg.substr(pos);
+			
 			std::stringstream ss(msg);  // 문자열을 스트림화
-			string user;
 			ss >> user; // 스트림을 통해, 문자열을 공백 분리해 변수에 할당
-			if (user != my_id) cout << buf << endl; // 내가 보낸 게 아닐 경우에만 출력하도록.
+			if (user != my_id && std::stoi(room_id) == current_room) cout << msg << endl; // 내가 보낸 게 아니고 내 방이 아닐 경우에만 출력하도록.
 		}
 		else {
 			cout << "Server Off" << endl;
@@ -54,7 +62,7 @@ string _input(bool isPassword, bool isSign) {
 
 	while (true) {
 		char ch = _getch();
-
+		
 		if (ch == 32) continue;
 		else if (ch == 13) { //\n
 			if (res.length() < 1 && isSign && ch == 'X') return "X";
@@ -129,10 +137,11 @@ int login() {
 	}
 }
 
-bool show_rooms() { //반환값이 false면 서버오류
+bool set_my_rooms() { //반환값이 false면 서버오류
 	char buf[MAX_SIZE] = { };
 	ZeroMemory(&buf, MAX_SIZE);
 
+	my_rooms = "";
 	if (recv(client_sock, buf, MAX_SIZE, 0) > 0) {
 		string roomInfo = buf;
 		if (roomInfo.compare("참여중인 채팅방이 없습니다.") == 0) {
@@ -152,6 +161,7 @@ bool show_rooms() { //반환값이 false면 서버오류
 			ss >> room.count_client;
 			rooms_info.push_back(room);
 
+			my_rooms += std::to_string(count_room) + " : " + room.room_name + "(" + std::to_string(room.count_client) + ")\n";
 			cout << count_room++ << " : " << room.room_name << "(" << room.count_client << ")" << endl;
 		}
 	}
@@ -175,6 +185,12 @@ void choose_room() {
 
 	current_room = rooms_info[room_number].id;
 	cout << rooms_info[room_number].room_name << " 방에 입장했습니다.\n\n";
+}
+
+void exit_room() {
+	cout << "채팅방을 나갔습니다.\n\n";
+	cout << my_rooms;
+	choose_room();
 }
 
 int main()
@@ -219,14 +235,18 @@ int main()
 		}
 		cout << "\n로그인 성공!\n";
 		cout << "[참여중인 채팅방 목록]\n\n";
-		if (!show_rooms()) return -1;
+		if (!set_my_rooms()) return -1;
+		//exit_room();
 
 		cin.ignore();
 		std::thread th2(chat_recv);
 		while (1) {
 			string text;
 			std::getline(cin, text);
-			string buffer = std::to_string(current_room) + " " + text; // string형을 char* 타입으로 변환
+			//if() //인원초대USERINVITE,
+			//else if() //인원 목록 조회USERLIST,
+			
+			string buffer = "MESSAGE," + std::to_string(current_room) + "," + text; // string형을 char* 타입으로 변환
 			
 			send(client_sock, buffer.c_str(), buffer.length(), 0);
 		}
