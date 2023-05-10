@@ -27,8 +27,9 @@ vector<ROOMS_INFO> rooms_info;
 int current_room, count_room;
 
 bool set_my_rooms(); //나의 채팅방 목록 my_rooms에 저장
-void choose_room(); //채팅방 선택하기
+bool choose_room(); //채팅방 선택하기
 void exit_room(); //채팅방 화면 나가기
+bool get_message(); //채팅방의 이전 메시지 출력
 
 int chat_recv() {
 	char buf[MAX_SIZE] = { };
@@ -171,12 +172,12 @@ bool set_my_rooms() { //반환값이 false면 서버오류
 	}
 
 	//채팅방 선택
-	choose_room();
+	if(!choose_room()) return false;
 
 	return true;
 }
 
-void choose_room() {
+bool choose_room() {
 	int room_number = -1;
 	while (room_number < 0 || room_number >= count_room) {
 		cout << "채팅방을 선택하세요. : ";
@@ -185,6 +186,57 @@ void choose_room() {
 
 	current_room = rooms_info[room_number].id;
 	cout << rooms_info[room_number].room_name << " 방에 입장했습니다.\n\n";
+
+	char buf[MAX_SIZE] = { };
+	ZeroMemory(&buf, MAX_SIZE);
+
+	string msg = "GETMESSAGE," + std::to_string(current_room);
+	send(client_sock, msg.c_str(), msg.length(), 0);
+
+	if(!get_message()) return false;
+
+	return true;
+}
+
+bool get_message() {
+	char buf[MAX_SIZE] = { };
+	ZeroMemory(&buf, MAX_SIZE);
+
+	string msg = "";
+	if (recv(client_sock, buf, MAX_SIZE, 0) > 0) {		
+		msg = buf;
+
+		if (msg.compare("X") == 0) return true;
+
+		std::istringstream iss(msg);  // 문자열을 스트림화
+		string temp_msg, past_date = "";
+
+		while (getline(iss, temp_msg, '\n')) {
+			string cur_date, time, message, temp_date;
+
+			int pos = temp_msg.find(",");  // 첫 번째 ','의 위치를 찾습니다.
+
+			temp_date = temp_msg.substr(0, pos++);
+			message = temp_msg.substr(pos);
+
+			std::stringstream ss(temp_date);
+			ss >> cur_date;
+			ss >> time;
+
+			if (cur_date.compare(past_date) != 0) {
+				cout << "(" << cur_date << ")\n";
+				past_date = cur_date;
+			}
+
+			cout << message << " (" << time << ")" << endl;
+		}
+	}
+	else {
+		cout << "Server Off" << endl;
+		return -1;
+	}
+
+	return true;
 }
 
 void exit_room() {

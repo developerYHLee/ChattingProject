@@ -1,6 +1,13 @@
-﻿  코드를 생성하고 있습니다.
-  37 of 320 functions (11.6%) were compiled, the rest were copied from previous compilation.
-    5 functions were new in current compilation
-    34 functions had inline decision re-evaluated but remain unchanged
+﻿  Client.cpp
+C:\Users\LYHo\Desktop\ChattingProject\Chatting\ChattingClient\Client.cpp(44,27): warning C4267: '초기화 중': 'size_t'에서 'int'(으)로 변환하면서 데이터가 손실될 수 있습니다.
+C:\Users\LYHo\Desktop\ChattingProject\Chatting\ChattingClient\Client.cpp(120,62): warning C4267: '인수': 'size_t'에서 'int'(으)로 변환하면서 데이터가 손실될 수 있습니다.
+C:\Users\LYHo\Desktop\ChattingProject\Chatting\ChattingClient\Client.cpp(194,48): warning C4267: '인수': 'size_t'에서 'int'(으)로 변환하면서 데이터가 손실될 수 있습니다.
+C:\Users\LYHo\Desktop\ChattingProject\Chatting\ChattingClient\Client.cpp(217,32): warning C4267: '초기화 중': 'size_t'에서 'int'(으)로 변환하면서 데이터가 손실될 수 있습니다.
+C:\Users\LYHo\Desktop\ChattingProject\Chatting\ChattingClient\Client.cpp(236,12): warning C4305: 'return': 'int'에서 'bool'(으)로 잘립니다.
+C:\Users\LYHo\Desktop\ChattingProject\Chatting\ChattingClient\Client.cpp(303,56): warning C4267: '인수': 'size_t'에서 'int'(으)로 변환하면서 데이터가 손실될 수 있습니다.
+  코드를 생성하고 있습니다.
+  26 of 322 functions ( 8.1%) were compiled, the rest were copied from previous compilation.
+    0 functions were new in current compilation
+    2 functions had inline decision re-evaluated but remain unchanged
   코드를 생성했습니다.
-  ChattingClient.vcxproj -> C:\Users\LYHo\Desktop\Chatting\ChattingServer\x64\Release\ChattingClient.exe
+  ChattingClient.vcxproj -> C:\Users\LYHo\Desktop\ChattingProject\Chatting\ChattingServer\x64\Release\ChattingClient.exe

@@ -29,7 +29,8 @@ sql::PreparedStatement* pstmt;
 string ID_Check(string id);
 void Select(string table);
 string get_rooms(string user_id); //chatting_user의 room_id 가져오기
-void SaveMessage(int room_id, string user_id, string msg);
+string SaveMessage(int room_id, string user_id, string msg); //메시지 저장하는 함수, 반환값 : 시간
+string GetChattingMessage(int room_id); //채팅방 메시지 가져오는 함수, 반환값 : 채팅방에 있는 메시지들
 //------------------------
 
 //------------------------ Server
@@ -172,16 +173,52 @@ string get_rooms(string user_id) {
     return info;
 }
 
-void SaveMessage(int room_id, string user_id, string msg) {
-    sql::ResultSet* result;
-
+string SaveMessage(int room_id, string user_id, string msg) {
     pstmt = con->prepareStatement("INSERT INTO chatting_message(room_id, user_id, message, _time) VALUES(?,?,?, current_time())"); // INSERT
 
     pstmt->setInt(1, room_id);
     pstmt->setString(2, user_id);
     pstmt->setString(3, msg);
     pstmt->execute();
-    cout << "SaveMessage Success" << endl;
+
+    sql::ResultSet* result;
+    string res = "";
+
+    pstmt = con->prepareStatement("select * from chatting_message");
+    result = pstmt->executeQuery();
+
+    int count = result->rowsCount();
+
+    pstmt = con->prepareStatement("select _time from chatting_message where id = ?");
+    pstmt->setInt(1, count);
+    result = pstmt->executeQuery();
+    result->next();
+
+    string dates = result->getString(1);
+    std::stringstream ss(dates);
+
+    string date, time;
+    ss >> date;
+    ss >> time;
+
+    delete result;
+
+    return " (" + time + ")";
+}
+
+string GetChattingMessage(int room_id) {
+    sql::ResultSet* result;
+    string res = "";
+
+    pstmt = con->prepareStatement("select user_id, message, _time from chatting_message where room_id = ? order by _time;");
+    pstmt->setInt(1, room_id);
+    result = pstmt->executeQuery();
+
+    while (result->next()) res += result->getString(3) + "," + result->getString(1) + " : " + result->getString(2) + "\n";
+
+    delete result;
+
+    return res;
 }
 
 int main()
@@ -400,9 +437,19 @@ void recv_msg(int idx) {
                 temp_msg = msg.substr(pos);
 
                 msg = sck_list[idx].user + " : " + temp_msg;
-                cout << msg << endl;
-                SaveMessage(stoi(room_number), sck_list[idx].user, temp_msg);
+                
+                msg += SaveMessage(stoi(room_number), sck_list[idx].user, temp_msg);
                 send_msg(msg.c_str(), stoi(room_number));
+            }
+            else if (option.compare("GETMESSAGE") == 0) {
+                int pos = msg.find(",");  // 첫 번째 ','의 위치를 찾습니다.
+
+                room_number = msg;
+
+                msg = GetChattingMessage(stoi(room_number));
+                
+                if (msg.compare("") == 0) msg = "X";
+                send(sck_list[idx].sck, msg.c_str(), msg.length(), 0);
             }
         }
         else {
