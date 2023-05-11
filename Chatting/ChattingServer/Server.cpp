@@ -29,7 +29,9 @@ sql::PreparedStatement* pstmt;
 string ID_Check(string id);
 void Select(string table);
 string get_rooms(string user_id); //chatting_user의 room_id 가져오기
-void SaveMessage(int room_id, string user_id, string msg);
+string SaveMessage(int room_id, string user_id, string msg); //메시지 저장하는 함수, 반환값 : 날짜 시간
+string GetChattingMessage(int room_id); //채팅방 메시지 가져오는 함수, 반환값 : 채팅방에 있는 메시지들
+void Sign_In(string user_id, string password, string nickname);
 //------------------------
 
 //------------------------ Server
@@ -146,6 +148,15 @@ void Delete() {
     delete result;
 }
 
+void Sign_In(string user_id, string password, string nickname) {
+    pstmt = con->prepareStatement("INSERT INTO user_info(id, password, nickname) VALUES(?,?,?)"); // INSERT
+
+    pstmt->setString(1, user_id);
+    pstmt->setString(2, password);
+    pstmt->setString(3, nickname);
+    pstmt->execute();
+}
+
 string get_rooms(string user_id) {
     sql::ResultSet* result;
     std::vector<string> infos;
@@ -172,16 +183,47 @@ string get_rooms(string user_id) {
     return info;
 }
 
-void SaveMessage(int room_id, string user_id, string msg) {
-    sql::ResultSet* result;
-
+string SaveMessage(int room_id, string user_id, string msg) {
     pstmt = con->prepareStatement("INSERT INTO chatting_message(room_id, user_id, message, _time) VALUES(?,?,?, current_time())"); // INSERT
 
     pstmt->setInt(1, room_id);
     pstmt->setString(2, user_id);
     pstmt->setString(3, msg);
     pstmt->execute();
-    cout << "SaveMessage Success" << endl;
+
+    sql::ResultSet* result;
+    string res = "";
+
+    pstmt = con->prepareStatement("select * from chatting_message");
+    result = pstmt->executeQuery();
+
+    int count = result->rowsCount();
+
+    pstmt = con->prepareStatement("select _time from chatting_message where id = ?");
+    pstmt->setInt(1, count);
+    result = pstmt->executeQuery();
+    result->next();
+
+    string dates = result->getString(1);
+
+    delete result;
+
+    return dates;
+}
+
+string GetChattingMessage(int room_id) {
+    sql::ResultSet* result;
+    string res = "";
+
+    pstmt = con->prepareStatement("select user_id, message, _time from chatting_message where room_id = ? order by _time;");
+    pstmt->setInt(1, room_id);
+    result = pstmt->executeQuery();
+
+    while (result->next()) res += result->getString(3) + "," + result->getString(1) + " : " + result->getString(2) + "\n";
+
+    delete result;
+
+    return res;
 }
 
 int main()
@@ -320,24 +362,47 @@ void login_client() {
         if (recv(new_client.sck, buf, MAX_SIZE, 0) > 0) {
             input_msg = buf;
             std::stringstream ss(input_msg);  // 문자열을 스트림화
-            string user_id, user_password;
+            string option, user_id, user_password;
+            ss >> option;
             ss >> user_id; // 스트림을 통해, 문자열을 공백 분리해 변수에 할당
             ss >> user_password;
 
             new_client.user = string(user_id); //new_client.user에 id 저장
             string password = ID_Check(new_client.user);
 
-            string return_msg = "";
-            if (password.compare(user_password) == 0) {
-                string msg = "[공지] " + new_client.user + " 님이 입장했습니다.";
-                cout << msg << endl; //서버 콘솔에 공지 찍음
-                return_msg = "Y";
-                send(new_client.sck, return_msg.c_str(), return_msg.length(), 0);
-                break;
+            if (option.compare("LOGIN") == 0) {
+                string return_msg = "";
+                if (password.compare(user_password) == 0) {
+                    string msg = "[공지] " + new_client.user + " 님이 입장했습니다.";
+                    cout << msg << endl; //서버 콘솔에 공지 찍음
+                    return_msg = "Y";
+                    send(new_client.sck, return_msg.c_str(), return_msg.length(), 0);
+                    break;
+                }
+                else {
+                    return_msg = "N";
+                    send(new_client.sck, return_msg.c_str(), return_msg.length(), 0);
+                }
             }
-            else {
-                return_msg = "N";
-                send(new_client.sck, return_msg.c_str(), return_msg.length(), 0);
+
+            else if (option.compare("SIGN_IN") == 0) {
+                string return_msg = "";
+                if (password.compare("X") == 0) {
+                    string user_nickname;
+                    ss >> user_nickname;
+
+                    Sign_In(user_id, user_password, user_nickname);
+
+                    string msg = "[공지] " + new_client.user + " 님이 입장했습니다.";
+                    cout << msg << endl; //서버 콘솔에 공지 찍음
+                    return_msg = "Y";
+                    send(new_client.sck, return_msg.c_str(), return_msg.length(), 0);
+                    break;
+                }
+                else {
+                    return_msg = "N";
+                    send(new_client.sck, return_msg.c_str(), return_msg.length(), 0);
+                }
             }
         }
 
@@ -398,11 +463,21 @@ void recv_msg(int idx) {
 
                 room_number = msg.substr(0, pos++);
                 temp_msg = msg.substr(pos);
-
-                msg = sck_list[idx].user + " : " + temp_msg;
-                cout << msg << endl;
-                SaveMessage(stoi(room_number), sck_list[idx].user, temp_msg);
+                
+                msg = SaveMessage(stoi(room_number), sck_list[idx].user, temp_msg);
+                
+                msg += " " + sck_list[idx].user + " : " + temp_msg;
                 send_msg(msg.c_str(), stoi(room_number));
+            }
+            else if (option.compare("GETMESSAGE") == 0) {
+                int pos = msg.find(",");  // 첫 번째 ','의 위치를 찾습니다.
+
+                room_number = msg;
+
+                msg = GetChattingMessage(stoi(room_number));
+                
+                if (msg.compare("") == 0) msg = "X";
+                send(sck_list[idx].sck, msg.c_str(), msg.length(), 0);
             }
         }
         else {
@@ -424,18 +499,12 @@ void del_client(string name) {
     cout << "delete_client_sort : " << sck_list_sort[idx].user << endl;
     closesocket(sck_list_sort[idx].sck);
     sck_list_sort.erase(idx);
-    for (int i = 0; i < sck_list_sort.size(); i++) {
-        cout << sck_list_sort[i].user << sck_list_sort[i].sck << endl;
-    }
 }
 
 void del_client(int idx) {
     cout << "delete_client : " << sck_list[idx].user << endl;
     closesocket(sck_list[idx].sck); 
     sck_list.erase(sck_list.begin() + idx);
-    for (int i = 0; i < sck_list.size(); i++) {
-        cout << sck_list[i].user << sck_list[i].sck << endl;
-    }
 }
 
 int search(string key) {
