@@ -7,6 +7,7 @@
 #include <vector>
 #include <iostream>
 #include <string>
+#include <ctime>
 
 #define MAX_SIZE 1024
 using std::cout;
@@ -22,7 +23,7 @@ struct ROOMS_INFO {
 };
 
 SOCKET client_sock;
-string my_id, my_rooms;
+string my_id, my_rooms, past_date = "";
 vector<ROOMS_INFO> rooms_info;
 int current_room, count_room;
 
@@ -31,7 +32,7 @@ bool choose_room(); //채팅방 선택하기
 void exit_room(); //채팅방 화면 나가기
 bool get_message(); //채팅방의 이전 메시지 출력
 int sign_in();
-void menu();
+bool menu(); //반환값이 false면 클라이언트 종료
 
 int chat_recv() {
 	char buf[MAX_SIZE] = { };
@@ -48,9 +49,22 @@ int chat_recv() {
 			room_id = msg.substr(0, pos++);
 			msg = msg.substr(pos);
 			
+			string cur_date, time;
 			std::stringstream ss(msg);  // 문자열을 스트림화
+			ss >> cur_date;
+			ss >> time;
 			ss >> user; // 스트림을 통해, 문자열을 공백 분리해 변수에 할당
-			if (user != my_id && std::stoi(room_id) == current_room) cout << msg << endl; // 내가 보낸 게 아니고 내 방이 아닐 경우에만 출력하도록.
+
+			pos = msg.find(user);
+			msg = msg.substr(pos);
+
+			if (user != my_id && std::stoi(room_id) == current_room) {
+				if (cur_date.compare(past_date) != 0) {
+					cout << "(" << cur_date << ")\n";
+					past_date = cur_date;
+				}
+				cout << msg << endl; // 내가 보낸 게 아니고 내 방이 아닐 경우에만 출력하도록.
+			}
 		}
 		else {
 			cout << "Server Off" << endl;
@@ -246,10 +260,18 @@ bool get_message() {
 	if (recv(client_sock, buf, MAX_SIZE, 0) > 0) {		
 		msg = buf;
 
-		if (msg.compare("X") == 0) return true;
+		if (msg.compare("X") == 0) {
+			time_t timer;
+			struct tm* t;
+			timer = time(NULL);
+			t = localtime(&timer);
 
+			cout << "(" + std::to_string(t->tm_year + 1900) + "-" + std::to_string(t->tm_mon + 1) + "-" + std::to_string(t->tm_mday) + ")\n";
+
+			return true;
+		}
 		std::istringstream iss(msg);  // 문자열을 스트림화
-		string temp_msg, past_date = "";
+		string temp_msg;
 
 		while (getline(iss, temp_msg, '\n')) {
 			string cur_date, time, message, temp_date;
@@ -285,7 +307,7 @@ void exit_room() {
 	choose_room();
 }
 
-void menu() {
+bool menu() {
 	cout << "1. [회원정보 수정]\n";
 	cout << "2. [참여중인 채팅방 목록]\n";
 	cout << "3. [로그아웃]\n";
@@ -300,7 +322,7 @@ void menu() {
 		cout << my_rooms << endl;
 		choose_room();
 	}
-	else if (menu == 3) return 0;
+	else if (menu == 3) return false;
 }
 
 int main()
@@ -352,7 +374,7 @@ int main()
 		cout << "\n로그인 성공!\n\n";
 		if (!set_my_rooms()) return -1;
 
-		menu();
+		if(!menu()) return 0;
 		//exit_room();
 
 		cin.ignore();

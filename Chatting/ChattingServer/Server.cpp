@@ -205,15 +205,10 @@ string SaveMessage(int room_id, string user_id, string msg) {
     result->next();
 
     string dates = result->getString(1);
-    std::stringstream ss(dates);
-
-    string date, time;
-    ss >> date;
-    ss >> time;
 
     delete result;
 
-    return " (" + time + ")";
+    return dates;
 }
 
 string GetChattingMessage(int room_id) {
@@ -468,10 +463,10 @@ void recv_msg(int idx) {
 
                 room_number = msg.substr(0, pos++);
                 temp_msg = msg.substr(pos);
-
-                msg = sck_list[idx].user + " : " + temp_msg;
                 
-                msg += SaveMessage(stoi(room_number), sck_list[idx].user, temp_msg);
+                msg = SaveMessage(stoi(room_number), sck_list[idx].user, temp_msg);
+                
+                msg += " " + sck_list[idx].user + " : " + temp_msg;
                 send_msg(msg.c_str(), stoi(room_number));
             }
             else if (option.compare("GETMESSAGE") == 0) {
@@ -504,18 +499,12 @@ void del_client(string name) {
     cout << "delete_client_sort : " << sck_list_sort[idx].user << endl;
     closesocket(sck_list_sort[idx].sck);
     sck_list_sort.erase(idx);
-    for (int i = 0; i < sck_list_sort.size(); i++) {
-        cout << sck_list_sort[i].user << sck_list_sort[i].sck << endl;
-    }
 }
 
 void del_client(int idx) {
     cout << "delete_client : " << sck_list[idx].user << endl;
     closesocket(sck_list[idx].sck); 
     sck_list.erase(sck_list.begin() + idx);
-    for (int i = 0; i < sck_list.size(); i++) {
-        cout << sck_list[i].user << sck_list[i].sck << endl;
-    }
 }
 
 int search(string key) {
