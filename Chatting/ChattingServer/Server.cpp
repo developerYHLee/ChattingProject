@@ -29,7 +29,7 @@ sql::PreparedStatement* pstmt;
 string ID_Check(string id);
 void Select(string table);
 string get_rooms(string user_id); //chatting_user의 room_id 가져오기
-string SaveMessage(int room_id, string user_id, string msg); //메시지 저장하는 함수, 반환값 : 시간
+string SaveMessage(int room_id, string user_id, string msg); //메시지 저장하는 함수, 반환값 : 날짜 시간
 string GetChattingMessage(int room_id); //채팅방 메시지 가져오는 함수, 반환값 : 채팅방에 있는 메시지들
 void Sign_In(string user_id, string password, string nickname);
 //------------------------
